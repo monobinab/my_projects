@@ -11,6 +11,14 @@ import json
 import logging
 
 scope = 'https://www.googleapis.com/auth/cloud-platform'
+# for JSON_CERTIFICATE_FILES
+print 'Enter your Service Account Key File with Path'
+key_file = raw_input()
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_file
+#os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/Users/monobina/Documents/svcmsaha.json"
+
+credentials = ServiceAccountCredentials.from_json_keyfile_name(key_file)
+
 credentials = GoogleCredentials.get_application_default()
 if credentials.create_scoped_required():
     credentials = credentials.create_scoped(scope)
@@ -19,10 +27,6 @@ http = httplib2.Http()
 credentials.authorize(http)
 
 crm = build('cloudresourcemanager', 'v1', http=http)
-
-
-
-#projects = crm.projects().list().execute()
 
 
 def instance_with_append_labels(instance, inputlabels):
@@ -39,18 +43,20 @@ def project_with_append_labels(project, inputlabels):
             project['labels'][key.strip()] = value.strip()
     return project
 
-def bigquery_with_append_labels(bigquery, inputlabels):
+def bigquery_with_append_labels(dataset, inputlabels):
     for label in inputlabels:
         key, value = label.split(":")
         if key and value:
-            bigquery['labels'][key.strip()] = value.strip()
-    return bigquery
+            dataset.labels[key.strip()] = value.strip()
+    return dataset
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
+
 
     logging.basicConfig(format='%(asctime)s %(message)s',filename='update_resource.log',level=logging.DEBUG)
 
-    print 'Enter type of Resource you want to Update: [ project | compute engine | big query ]'
+    print 'Enter type of Resource you want to Update: [ project | compute engine | bigquery ]'
     #accepted values: project
     resource_type = raw_input()
     if resource_type is not None and resource_type.strip().lower() in ('project', 'compute engine', 'bigquery'):
@@ -68,7 +74,7 @@ if __name__=="__main__":
         f = open(input_file, 'r')
     except IOError:
         print "Input File Not Found"
-        exit()
+        exit(1)
 
     print 'Does it have header? Type: Y/N'
     contains_header = raw_input()
@@ -108,8 +114,8 @@ if __name__=="__main__":
 
                 try:
                     project = crm.projects().get(projectId=projectid).execute()
-                except:
-                    logging.warning('Project Not Found')
+                except Exception as int:
+                    logging.warning(inst)
                     error_file.write(line + '| This project is not found: ' + projectid + "\n")
                     continue
 
@@ -125,45 +131,67 @@ if __name__=="__main__":
 
         elif resource_type == 'compute engine':
             logging.info ("Updating Instances Labels")
-            strtokens = line.split(",")
-            projectid = strtokens[0]
-            instanceid = strtokens[1]
-            zonename = strtokens[2]
-            resourcelabels = strtokens[3].split("|")
-            logging.debug ("Resource labels is: ", resourcelabels)
+            if line:
+                try:
 
-            crm_compute = build('compute', 'v1', http=http)
-            instance = crm_compute.instances().get(project=projectid, instance=instanceid, zone=zonename).execute()
-            print(json.dumps(instance, indent=4, sort_keys=True))
+                    strtokens = line.split(",")
+                    projectid = strtokens[0]
+                    instanceid = strtokens[1]
+                    zonename = strtokens[2]
+                    resourcelabels = strtokens[3].split("|")
 
-            instance = instance_with_append_labels(instance, resourcelabels)
-            #instance.update()
+                except Exception as inst:
+                    logging.error(inst)
+                    error_file.write(line+'|'+str(inst))
+                    continue;
 
-            instance = crm_compute.instances().setLabels(
-                project = projectid, instance=instanceid, body=instance, zone = zonename).execute()
+                logging.info(projectid)
+                logging.info(instanceid)
+
+                try:
+
+                    crm_compute = build('compute', 'v1', http=http)
+                    instance = crm_compute.instances().get(project=projectid, instance=instanceid, zone=zonename).execute()
+                except Exception as inst:
+                    logging.warning(inst)
+                    error_file.write(line+'|'+str(inst))
+                    exit(1)
+
+                instance = instance_with_append_labels(instance, resourcelabels)
+                #instance.update()
+                try:
+                    instance = crm_compute.instances().setLabels(
+                        project = projectid, instance=instanceid, body=instance, zone = zonename).execute()
+                except Exception as inst:
+                    logging.error(inst)
+                    exit(1)
 
         elif resource_type == 'bigquery':
-            print 'Updating BigQuery'
-            strtokens = line.split(",")
-            projectid = strtokens[0]
-            datasetid = strtokens[1]
-            bigquerylabels = strtokens[2]
-            datasetref = bigquery.dataset.DatasetReference.from_string(datasetid)
-            dataset_list = bigquery.Client(project=projectid).get_dataset(datasetref)
-            print dataset_list
+            logging.info ('Updating BigQuery Labels')
+            if line:
+                try:
+                    strtokens = line.split(",")
+                    projectid = strtokens[0].strip()
+                    datasetid = strtokens[1].strip()
+                    datasetid = projectid+'.'+datasetid
+                    bigquerylabels = strtokens[2].strip().split("|")
+                except Exception as inst:
+                    logging.error(inst)
+                    error_file.write(line + '|' + str(inst))
+
+            logging.info(bigquerylabels)
+
+            client = bigquery.Client.from_service_account_json(key_file)
+            try:
+                datasetref = bigquery.dataset.DatasetReference.from_string(datasetid)
+                dataset = client.get_dataset(datasetref)
+                dataset = bigquery_with_append_labels(dataset,bigquerylabels)
+                dataset = client.update_dataset(dataset, ['labels'])
+            except Exception as inst:
+                logging.warning(inst)
+                error_file.write(line + '|' + str(inst))
 
 
-            bigquery = bigquery_with_append_labels(bigquery, bigquerylabels)
-            client = bigquery.Client.update_dataset(projectid,dataset,bigquery)
-                #(credentials=credentials, project=projectid)
-            #crm = build('bigquery', 'v1', http=http)
-
-
-            bigquery = crm.bigQuery().get(project=projectid, dataset=dataset).execute()
-            print (bigquery)
-
-            bigquery = crm.update_dataset(dataset,bigquery_labels(bigquery,bigquerylabels))
-            assert dataset.labels == labels
 
 
 
