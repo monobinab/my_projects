@@ -19,7 +19,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_file
 
 credentials = ServiceAccountCredentials.from_json_keyfile_name(key_file)
 
-credentials = GoogleCredentials.get_application_default()
+#credentials = GoogleCredentials.get_application_default()
 if credentials.create_scoped_required():
     credentials = credentials.create_scoped(scope)
 
@@ -29,7 +29,7 @@ credentials.authorize(http)
 crm = build('cloudresourcemanager', 'v1', http=http)
 
 
-def instance_with_append_labels(instance, inputlabels):
+def resource_with_append_labels(instance, inputlabels):
     for label in inputlabels:
         key, value = label.split(":")
         if key and value:
@@ -100,34 +100,28 @@ if __name__ == "__main__":
             if line:
                 try:
                     strtokens = line.split(",")
-                    projectid = strtokens[0].strip()
-                    projectlabels = strtokens[1].split("|").strip()
+                    projectid = strtokens[0]
+                    projectlabels = strtokens[1].split("|")
                 except Exception as inst:
                     logging.error(inst)
-                    error_file.write(line+'|' + str(inst))
-                    continue
+                    error_file.write(line + '|' + str(inst))
+                    continue;
+                logging.info(projectid)
+                logging.info(projectlabels)
 
-                logging.info (projectid)
-                logging.info (projectlabels)
-
-                logging.info ("Getting Project Detail")
+                logging.info("Getting Project Detail")
 
                 try:
-                    project = crm.projects().get(projectId=projectid).execute()
-                except Exception as int:
-                    logging.warning(inst)
-                    error_file.write(line + '| This project is not found: ' + projectid + "\n")
-                    continue
-
-                project = project_with_append_labels(project, projectlabels)
-                # if there is any authentication error or somehow this update didn't happen; then it will exit out after recording the error
-                try:
-
-                    project = crm.projects().update(
-                        projectId=projectid, body=project).execute()
+                        project = crm.projects().get(projectId=projectid).execute()
+                        project = project_with_append_labels(project, projectlabels)
+                        project = crm.projects().update(
+                            projectId=projectid, body=project).execute()
                 except Exception as inst:
-                    logging.error(inst)
-                    exit(1)
+                        logging.warning(inst)
+                        error_file.write(line + '| This project is not found: ' + projectid + "\n")
+                        exit(1)
+
+
 
         elif resource_type == 'compute engine':
             logging.info ("Updating Instances Labels")
@@ -157,7 +151,7 @@ if __name__ == "__main__":
                     error_file.write(line+'|'+str(inst))
                     exit(1)
 
-                instance = instance_with_append_labels(instance, resourcelabels)
+                instance = resource_with_append_labels(instance, resourcelabels)
                 #instance.update()
                 try:
                     instance = crm_compute.instances().setLabels(
