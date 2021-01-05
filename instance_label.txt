@@ -1,2 +1,0 @@
-projectid,instanceid,zone,labels
-msaha-236617,5841297610849531737,us-east1-b,team:data-engg
