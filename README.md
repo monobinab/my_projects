@@ -1,2 +1,0 @@
-# gcp-billing
-gcp-billing
