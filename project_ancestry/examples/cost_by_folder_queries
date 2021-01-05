@@ -1,0 +1,369 @@
+/*SELECT distinct project.id, project.ancestry_numbers FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` WHERE 
+project.ancestry_numbers is not null
+and project.ancestry_numbers like '%986716781431%';*/
+
+/*SELECT sum(cost) FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE project.id = 'keshi-test-project-4';--173.02400699999995*/
+
+/*select project.id, project.ancestry_numbers FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B`
+WHERE project.id = 'keshi-test-project-4';--/1082147662149/573441041267/422762996858/*/
+
+/*select sum(cost) FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE project.ancestry_numbers like '%1082147662149%';--17606.23837299992*/
+
+/*select sum(cost) FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE project.ancestry_numbers like '%573441041267%';--346.04834899999986*/
+
+select sum(cost) FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE 
+project.ancestry_numbers like '%573441041267%'
+and date(usage_start_time) between '2019-01-01' and '2019-05-21';--349.40557699999994
+
+/*select sum(cost) FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE project.ancestry_numbers like '%422762996858%';--173.0240069999999*/
+
+select sum(cost) FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE project.ancestry_numbers like '%422762996858%'
+and date(usage_start_time) between '2019-01-01' and '2019-05-21';--174.70267100000007
+
+
+/*select distinct (project.id) from `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE project.ancestry_numbers like '%1082147662149%';--30 projects*/
+
+/*select distinct (substr(project.ancestry_numbers, 14, 26)) from `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE project.ancestry_numbers like '%1082147662149%';--3 top level folders underneath this org id*/
+
+/*select project.ancestry_numbers,substr(project.ancestry_numbers, 16, 28) from`data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+where substr(project.ancestry_numbers, 14, 26)  like '%573441041267%';*/
+
+
+select distinct total_cost_by_org,projectid, substr(ancestry_numbers, 2, 12), ancestry_numbers
+from
+(
+SELECT   
+projectid, 
+folder_nm,
+organization_nm, 
+parent_folder_nm, 
+folder_path,
+b.project.ancestry_numbers,
+sum(cost) over (partition by split(project.ancestry_numbers, '/')[offset(1)] order by substr(project.ancestry_numbers, 2, 12)) total_cost_by_org
+FROM 
+`data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` b
+join  `cardinal-data-piper-sbx.public.gcp_project_ancestry` ph
+on ph.projectid = b.project.id
+)
+
+;
+
+SELECT project.ancestry_numbers, 
+split(project.ancestry_numbers, '/')[offset(1)] as org,
+split(project.ancestry_numbers, '/')[offset(2)] as highest_folder
+FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE project.ancestry_numbers is not null;
+
+
+Request Hierarchy Response 
+{"ancestor": [{"resourceId": {"type": "project", "id": "cardinal-data-piper-sbx"}}, {"resourceId": {"type": "folder", "id": "874539411255"}}, {"resourceId": {"type": "folder", "id": "720396353132"}}, {"resourceId": {"type": "organization", "id": "986716781431"}}]}
+
+
+
+
+
+insert into `cardinal-data-piper-sbx.public.gcp_project_ancestry` (projectid, organization_nm, folder_nm, folder_id, folder_id_path, folder_path, parent_folder_nm, parent_folder_id, create_user, create_timestamp) values ( 'cardinal-data-piper-sbx', 'gflocks.com', 'Billing', 720396353132, '/986716781431/720396353132/874539411255', '/DP - Test Billing Folder/Billing', null, null, session_user(), current_timestamp() );
+
+
+create table `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension` as
+SELECT distinct project.id
+, split(project.ancestry_numbers, '/')[offset(1)] as org
+, split(project.ancestry_numbers, '/')[offset(2)] as folder_level_1_id
+, split(project.ancestry_numbers, '/')[offset(3)] as folder_level_2_id
+, split(project.ancestry_numbers, '/')[offset(4)] as folder_level_3_id
+, split(project.ancestry_numbers, '/')[offset(5)] as folder_level_4_id
+FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+WHERE --DATE(_PARTITIONTIME) = "2019-05-22" and 
+project.ancestry_numbers is not null and project.ancestry_numbers like '%/%/%/%/%/%/'
+
+create table `cardinal-data-piper-sbx.public.gcp_project_folder_ancestry_dim1` as
+select
+projectid,
+organization_name,
+max(case when level = '1' then folder_name end) as folder_level_1,
+max(case when level = '2' then folder_name end) as folder_level_2,
+max(case when level = '3' then folder_name end) as folder_level_3,
+max(case when level = '4' then folder_name end) as folder_level_4
+from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim`p 
+group by organization_name, projectid
+;
+
+
+update `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension`
+set org_name='Organization A' where org='430062980571';
+
+update `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension`
+set folder_level_1_name='SVP B' where folder_level_1_id='355832851231';
+
+select distinct folder_level_4_id
+from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension`
+
+
+SELECT project.id, project.name, cost,  usage_start_time, usage_end_time, project.ancestry_numbers
+, split(project.ancestry_numbers, '/')[offset(1)] as org
+, split(project.ancestry_numbers, '/')[offset(2)] as folder_level_1_id
+, split(project.ancestry_numbers, '/')[offset(3)] as folder_level_2_id
+, split(project.ancestry_numbers, '/')[offset(4)] as folder_level_3_id
+, split(project.ancestry_numbers, '/')[offset(5)] as folder_level_4_id
+FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` WHERE DATE(_PARTITIONTIME) = "2019-05-22" 
+and project.ancestry_numbers is not null and project.ancestry_numbers like '%/%/%/%/%/'
+
+
+#final bi query
+SELECT a.id, a.name, a.cost, a.usage_start_time, a.usage_end_time, a.ancestry_numbers
+, b.org_name, b1.folder_level_name, b2.folder_level_name, b3.folder_level_name, b3.folder_level_name
+FROM (
+  SELECT project.id, project.name, cost,  usage_start_time, usage_end_time, project.ancestry_numbers
+  , split(project.ancestry_numbers, '/')[offset(1)] as org
+  , split(project.ancestry_numbers, '/')[offset(2)] as folder_level_1_id
+  , split(project.ancestry_numbers, '/')[offset(3)] as folder_level_2_id
+  , split(project.ancestry_numbers, '/')[offset(4)] as folder_level_3_id
+  , split(project.ancestry_numbers, '/')[offset(5)] as folder_level_4_id
+  FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+  WHERE project.ancestry_numbers is not null ) a
+left outer join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension` b1
+left outer join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension` b2
+left outer join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension` b3
+left outer join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension` b4
+on a.folder_level_1_id = b1.folder_level_id and a.org = b1.org and a.id = b1.id
+a.folder_level_2_id = b2.folder_level_id and a.org = b2.org and a.id = b2.id
+
+--this final query overrides above query
+create table `cardinal-data-piper-sbx.public.bi_query_by_folder_columns` as 
+SELECT a.id, a.name, a.cost, a.usage_start_time, a.usage_end_time, a.ancestry_numbers
+, b1.organization_name, b1.folder_name as folder_level_1, b2.folder_name as folder_level_2, b3.folder_name as folder_level_3, b4.folder_name as folder_level_4
+FROM (
+  SELECT project.id, project.name, cost,  usage_start_time, usage_end_time, project.ancestry_numbers
+  , split(project.ancestry_numbers, '/')[offset(1)] as organization_id
+  , (case when project.ancestry_numbers like '/%/%/' then split(project.ancestry_numbers, '/')[offset(2)] else null end) as folder_level_1_id
+  , (case when project.ancestry_numbers like '/%/%/%/' then split(project.ancestry_numbers, '/')[offset(3)] else null end) as folder_level_2_id
+  , (case when project.ancestry_numbers like '/%/%/%/%/' then split(project.ancestry_numbers, '/')[offset(4)] else null end) as folder_level_3_id
+  , (case when project.ancestry_numbers like '/%/%/%/%/%/' then split(project.ancestry_numbers, '/')[offset(5)] else null end) as folder_level_4_id
+  FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+  WHERE project.ancestry_numbers is not null --and project.id in ('efx-gcp-df-svpc-npe-0303', 'df-dna-mktplace-npe-19de', '' 
+) a
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` b1 on a.folder_level_1_id = b1.folder_id and a.organization_id = b1.organization_id and a.id = b1.projectid
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` b2 on a.folder_level_2_id = b2.folder_id and a.organization_id = b2.organization_id and a.id = b2.projectid
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` b3 on a.folder_level_3_id = b3.folder_id and a.organization_id = b3.organization_id and a.id = b3.projectid
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` b4 on a.folder_level_3_id = b4.folder_id and a.organization_id = b4.organization_id and a.id = b4.projectid;
+
+
+create table `cardinal-data-piper-sbx.public.bi_query_by_folder_columns_new` as 
+SELECT a.id, a.name, a.cost, a.usage_start_time, a.usage_end_time, a.ancestry_numbers
+, b1.organization_name, b1.folder_name as folder_level_1, b2.folder_name as folder_level_2, b3.folder_name as folder_level_3, b4.folder_name as folder_level_4
+FROM (
+  SELECT project.id, project.name, cost,  usage_start_time, usage_end_time, project.ancestry_numbers
+  , split(project.ancestry_numbers, '/')[offset(1)] as organization_id
+  , (case when project.ancestry_numbers like '/%/%/' then split(project.ancestry_numbers, '/')[offset(2)] else null end) as folder_level_1_id
+  , (case when project.ancestry_numbers like '/%/%/%/' then split(project.ancestry_numbers, '/')[offset(3)] else null end) as folder_level_2_id
+  , (case when project.ancestry_numbers like '/%/%/%/%/' then split(project.ancestry_numbers, '/')[offset(4)] else null end) as folder_level_3_id
+  , (case when project.ancestry_numbers like '/%/%/%/%/%/' then split(project.ancestry_numbers, '/')[offset(5)] else null end) as folder_level_4_id
+  FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+  WHERE project.ancestry_numbers is not null --and project.id in ('efx-gcp-df-svpc-npe-0303', 'df-dna-mktplace-npe-19de', '' 
+) a
+join (select * from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` where level = '1') b1 on a.folder_level_1_id = b1.folder_id and a.organization_id = b1.organization_id and a.id = b1.projectid
+join (select * from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` where level = '2') b2 on a.folder_level_2_id = b2.folder_id and a.organization_id = b2.organization_id and a.id = b2.projectid
+join (select * from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` where level = '3') b3 on a.folder_level_3_id = b3.folder_id and a.organization_id = b3.organization_id and a.id = b3.projectid
+join (select * from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` where level = '4') b4 on a.folder_level_3_id = b4.folder_id and a.organization_id = b4.organization_id and a.id = b4.projectid;
+
+
+
+SELECT a.id, a.name, a.cost, a.usage_start_time, a.usage_end_time, a.ancestry_numbers
+, b1.organization_name
+, b1.folder_name
+, b1.parent_folder_name
+, b1.level
+FROM (
+  SELECT project.id, project.name, cost,  usage_start_time, usage_end_time, project.ancestry_numbers
+  , split(project.ancestry_numbers, '/')[offset(1)] as organization_id
+  , (case when project.ancestry_numbers like '/%/%/' then split(project.ancestry_numbers, '/')[offset(2)] else null end) as folder_level_1_id
+  , (case when project.ancestry_numbers like '/%/%/%/' then split(project.ancestry_numbers, '/')[offset(3)] else null end) as folder_level_2_id
+  , (case when project.ancestry_numbers like '/%/%/%/%/' then split(project.ancestry_numbers, '/')[offset(4)] else null end) as folder_level_3_id
+  , (case when project.ancestry_numbers like '/%/%/%/%/%/' then split(project.ancestry_numbers, '/')[offset(5)] else null end) as folder_level_4_id
+  FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` 
+  WHERE project.ancestry_numbers is not null --and project.id in ('efx-gcp-df-svpc-npe-0303', 'df-dna-mktplace-npe-19de', '' 
+) a
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` b1 on (
+	a.folder_level_1_id = b1.folder_id or 
+	a.folder_level_2_id = b1.folder_id or 
+	a.folder_level_3_id = b1.folder_id or
+	a.folder_level_3_id = b1.folder_id ) and a.organization_id = b1.organization_id and a.id = b1.projectid
+
+
+
+
+
+
+Test Queries
+
+--select distinct folder_level_2 from `cardinal-data-piper-sbx.public.bi_query_by_folder_columns_new`;
+/*select * from `cardinal-data-piper-sbx.public.bi_query_by_folder_columns`
+where folder_level_2 = 'Sen Dir C';
+
+select count(*) from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim`;--192
+
+select count(*) from `cardinal-data-piper-sbx.public.bi_query_by_folder_columns`;*/
+select count(*) from `cardinal-data-piper-sbx.public.bi_query_by_folder_columns`;--592210
+
+select count(*) from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim where projectid = `gsk-security-forseti-dev-0ffd';
+
+select sum(cost) from (
+select
+*
+from `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` b
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` p
+on b.project.id = p.projectid
+where folder_name = 'SVP A');--6712.366825999978
+
+select distinct(folder_name) from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` where parent_folder_name = 'SVP A';--VP A,VP I,VP J
+
+select sum(cost), folder_name from (
+select
+*
+from `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` b
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` p
+on b.project.id = p.projectid
+where folder_name in ('VP A','VP I' ,'VP J')
+group by folder_name);--6712.366825999978
+/*
+[
+  {
+    "f0_": "1.4132440000000004",
+    "folder_name": "VP A"
+  },
+  {
+    "f0_": "6693.102621999976",
+    "folder_name": "VP J"
+  },
+  {
+    "f0_": "17.85096",
+    "folder_name": "VP I"
+  }
+]
+*/
+
+
+select count(distinct projectid) from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` where folder_name = 'SVP A';--33
+
+select count(distinct projectid) from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` where folder_name = 'VP J';--17
+
+select count(distinct projectid) from `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` where folder_name = 'VP A';--15
+
+select
+cost,
+projectid,
+organization_name,
+case when level = '1' then folder_name end as folder_level_1,
+case when level = '2' then folder_name end as folder_level_2,
+case when level = '3' then folder_name end as folder_level_3,
+case when level = '4' then folder_name end as folder_level_4
+FROM `data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` b
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim`p on b.project.id = p.projectid
+where folder_level_1 is not null
+and folder_level_2 is not null
+and folder_level_3 is not null
+and folder_level_4 is not null
+order by projectid;
+
+select
+cost,
+usage_start_time,
+usage_end_time,
+id,
+project.name as project_name,
+org_name,
+folder_level_1_name,
+folder_level_2_name,
+folder_level_3_name,
+folder_level_4_name
+from
+`data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` b
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension` p
+on b.project.id = p.id
+;
+
+--one BI query
+select
+cost,
+usage_start_time,
+usage_end_time,
+id as projectid,
+project.name as project_name,
+org_name as organization_name,
+folder_level_1_name,
+folder_level_2_name,
+folder_level_3_name,
+folder_level_4_name
+from
+`data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` b
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension` p
+on b.project.id = p.id
+;
+
+--create table in BQ for hierarchy
+create table `cardinal-data-piper-sbx.public.gcp_org_folder_hierarchy` as
+SELECT  
+projectid,
+organization_name,
+folder_level_1_name,
+folder_level_2_name,
+folder_level_3_name,
+folder_level_4_name,
+create_user,
+create_timestamp
+FROM `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension_by_program` 
+;
+
+--another bi query by level but visualization is not great
+select
+cost,
+usage_start_time,
+usage_end_time,
+id,
+project.name as project_name,
+org_name,
+folder_name,
+level,
+parent_folder_name
+from
+`data-analytics-pocs.billing.gcp_billing_export_v1_0090FE_ED3D81_AF8E3B` b
+join `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dim` p
+on b.project.id = p.id
+;
+
+--to create a new dimension table from old table
+create table `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension_by_program` as 
+select
+id as projectid,
+org as organization_id,
+folder_level_1_id,
+folder_level_2_id,
+folder_level_3_id,
+folder_level_4_id,
+org_name as organization_name,
+folder_level_1_name,
+folder_level_2_name,
+folder_level_3_name,
+folder_level_4_name
+from
+`cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension`
+
+
+
+insert into `cardinal-data-piper-sbx.public.gcp_org_project_folder_ancestry_dimension_by_program` (projectid, organization_nm, folder_level_1, folder_level_2, folder_level_3, folder_level_4, create_user, create_timestamp) values ( 'cardinal-data-piper-sbx', 'gflocks.com', 'DP - Test Billing Folder', Billing, '', '', null, null, session_user(), current_timestamp() );
+
+
+
+
+
+
+
+
